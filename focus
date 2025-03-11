@@ -46,7 +46,7 @@ flush_dns() {
   else
     echo -e "No active system DNS cache detected, attempting manual flush...\n" >> $LOG_FILE
     sudo -n killall -HUP systemd-resolved 2>/dev/null
-    echo -e "Manual DNS flush attempt complete.\n" >> focus.log
+    echo -e "Manual DNS flush attempt complete.\n" >> $LOG_FILE
   fi
 }
 
