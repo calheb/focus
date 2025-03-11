@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+
+HOSTS_FILE="/etc/hosts"
+NORMAL_HOSTS="/etc/hosts.normal"
+BLOCKED_HOSTS="/etc/hosts.blocked"
+
+if [ -n "$SUDO_USER" ]; then
+  USER_HOME=$(eval echo ~${SUDO_USER})
+else
+  USER_HOME=$HOME
+fi
+
+LOG_DIR="$USER_HOME/.local/share/focus"
+LOG_FILE="$LOG_DIR/focus.log"
+
+if [[ ! -f "$NORMAL_HOSTS" ]]; then
+  sudo cp "$HOSTS_FILE" "$NORMAL_HOSTS"
+  echo -e "Saved original hosts file to $NORMAL_HOSTS"
+fi
+
+if [[ ! -f "$BLOCKED_HOSTS" ]]; then
+  sudo cp "$NORMAL_HOSTS" "$BLOCKED_HOSTS"
+
+  sudo tee -a "$BLOCKED_HOSTS" > /dev/null << EOF
+
+# focus
+# To block a website, add a line with: 0.0.0.0 website.com or uncomment one of the examples.
+# 0.0.0.0 facebook.com
+# 0.0.0.0 twitter.com
+# 0.0.0.0 youtube.com
+# 0.0.0.0 reddit.com
+# 0.0.0.0 instagram.com
+
+EOF
+
+  echo -e "Created blocked hosts file at $BLOCKED_HOSTS"
+  echo -e "Edit your blocked sites list at: /etc/hosts.blocked\n"
+
+fi
+
+flush_dns() {
+  echo -e "Flushing system DNS cache...\n" >> $LOG_FILE
+  if systemctl is-active --quiet systemd-resolved; then
+    sudo -n systemctl restart systemd-resolved
+    echo "Flushed systemd-resolved cache."
+  else
+    echo -e "No active system DNS cache detected, attempting manual flush...\n" >> $LOG_FILE
+    sudo -n killall -HUP systemd-resolved 2>/dev/null
+    echo -e "Manual DNS flush attempt complete.\n" >> focus.log
+  fi
+}
+
+check_status() {
+  if cmp -s "$HOSTS_FILE" "$BLOCKED_HOSTS"; then
+    echo "focus is ON"
+    return 0
+  elif cmp -s "$HOSTS_FILE" "$NORMAL_HOSTS"; then
+    echo "focus is OFF"
+    return 1
+  else
+    echo "focus status is UNKNOWN (hosts file has been modified)"
+    echo -e "Review logs at: $LOG_FILE"
+    return 2
+  fi
+}
+
+case "$1" in
+  on)
+    sudo -n cp "$BLOCKED_HOSTS" "$HOSTS_FILE"
+    echo -e "Hosts file switched to BLOCKED mode.\n" >> $LOG_FILE
+    echo -e "time to focus.\nYou may need to restart your browser for the changes to take effect."
+    flush_dns
+    ;;
+  off)
+    sudo -n cp "$NORMAL_HOSTS" "$HOSTS_FILE"
+    echo -e "Hosts file switched to NORMAL mode.\n" >> $LOG_FILE
+    echo -e "focus time is over.\nYou may need to restart your browser for the changes to take effect."
+    flush_dns
+    ;;
+  status)
+    check_status
+    ;;
+  help)
+    echo "Edit your blocked sites list at: /etc/hosts.blocked"
+    echo -e "\nReview logs at: $LOG_FILE"
+    echo -e "\nusage: focus [on] [off] [status] [help]"
+    ;;
+  *)
+    echo "usage: focus [on] [off] [status] [help]"
+    exit 1
+    ;;
+esac
