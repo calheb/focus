@@ -9,6 +9,7 @@
 |___|    |_______||_______||_______||_______|
 ---------------------------------------------
 block distracting websites with ease
+available on Linux
 </pre>
 </div>
 
